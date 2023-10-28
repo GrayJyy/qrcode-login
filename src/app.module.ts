@@ -11,9 +11,13 @@ import config from './utils/env';
     RedisModule,
     ConfigModule.forRoot({ isGlobal: true, load: [config] }),
     JwtModule.registerAsync({
+      global: true,
       inject: [ConfigService],
       async useFactory(configService: ConfigService) {
-        return { secret: configService.get('jwt.secret') };
+        return {
+          global: true,
+          secret: configService.get('jwt.secret'),
+        };
       },
     }),
   ],

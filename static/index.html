@@ -19,6 +19,7 @@
       function queryStatus(id) {
         axios.get('http://localhost:3000/qrcode/check?id=' + id).then((res) => {
           const status = res.data.status;
+          const userId = res.data.userId;
           let content = '';
           switch (status) {
             case 'no-scan':
@@ -28,7 +29,7 @@
               content = '已扫码，等待确认';
               break;
             case 'scan-confirm':
-              content = '已确认';
+              content = `已确认,当前登录用户 id 为${userId}`;
               break;
             case 'scan-cancel':
               content = '已取消';

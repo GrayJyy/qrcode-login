@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpException,
   HttpStatus,
   Inject,
@@ -55,14 +56,31 @@ export class AppController {
     @Body('username') username: string,
     @Body('password') password: string,
   ) {
+    console.log('loooooo');
+
     const user = this.users.find((item) => item.username === username);
     if (!user) throw new UnauthorizedException('用户不存在');
     if (user.password !== password) throw new UnauthorizedException('密码错误');
+    const _token = this.jwtService.sign({
+      userId: user.id,
+    });
+    console.log('_token', _token);
+
     return {
-      token: this.jwtService.sign({
-        userId: user.id,
-      }),
+      token: _token,
     };
+  }
+
+  @Get('userinfo')
+  async userInfo(@Headers('Authorization') auth: string) {
+    try {
+      const [, _token] = auth.split(' ');
+      const _info = await this.jwtService.verify(_token);
+      const _user = this.users.find((item) => item.id == _info.userId);
+      return _user;
+    } catch (error) {
+      throw new UnauthorizedException('token已过期');
+    }
   }
 
   @Get('qrcode/generate')
@@ -89,7 +107,8 @@ export class AppController {
     @Query('id') id: `${string}-${string}-${string}-${string}-${string}`,
   ) {
     const _status = await this.redisService.hGet(`qrcode_${id}`, 'status');
-    return { status: _status };
+    const _userId = await this.redisService.hGet(`qrcode_${id}`, 'userId');
+    return { status: _status, userId: _userId };
   }
 
   @Get('qrcode/scan')
@@ -107,11 +126,27 @@ export class AppController {
   @Get('qrcode/confirm')
   async confirm(
     @Query('id') id: `${string}-${string}-${string}-${string}-${string}`,
+    @Headers('Authorization') auth: string,
   ) {
+    let _user: (typeof this.users)[0];
+    try {
+      const [, _token] = (auth || '').split(' ');
+      console.log('_token', _token);
+
+      const _info = await this.jwtService.verify(_token);
+      console.log('12121', _info);
+      _user = this.users.find((item) => item.id == _info.userId);
+    } catch (error) {
+      throw new UnauthorizedException('token 过期，请重新登录');
+    }
     const _status = await this.redisService.hGet(`qrcode_${id}`, 'status');
+    console.log(_status);
     if (!_status) throw new BadRequestException('二维码已过期');
     await this.redisService.hSet(`qrcode_${id}`, {
       status: EStatus['已扫码，用户同意授权'],
+    });
+    await this.redisService.hSet(`qrcode_${id}`, {
+      userId: _user.id,
     });
     return new HttpException('success', HttpStatus.OK);
   }
